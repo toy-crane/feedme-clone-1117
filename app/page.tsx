@@ -1,6 +1,6 @@
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/features/auth/user-menu";
-import { UrlToMarkdown } from "@/features/url-to-markdown/url-to-markdown";
+import { HomeConverter } from "./home-converter";
 
 export default function Home() {
   return (
@@ -17,7 +17,7 @@ export default function Home() {
           <ThemeToggle />
         </div>
       </header>
-      <UrlToMarkdown />
+      <HomeConverter />
     </main>
   );
 }

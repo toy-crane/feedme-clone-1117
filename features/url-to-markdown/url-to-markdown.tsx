@@ -1,33 +1,18 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
-import ReactMarkdown from "react-markdown";
-import {
-  AlertCircleIcon,
-  CheckIcon,
-  CopyIcon,
-  DownloadIcon,
-  ExternalLinkIcon,
-  InfoIcon,
-  Loader2Icon,
-  XIcon,
-} from "lucide-react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AlertCircleIcon, Loader2Icon, XIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ArticleHeader } from "@/components/markdown-export/article-header";
+import { ExportPanel } from "@/components/markdown-export/export-panel";
+import { MarkdownBody } from "@/components/markdown-export/markdown-body";
 
 import type { ConvertErrorCode, ConvertResult } from "./convert-url";
-import {
-  buildChatUrl,
-  buildExportText,
-  downloadFilename,
-  type ChatService,
-} from "./export";
 
 const ERRORS: Record<ConvertErrorCode, { title: string; desc: string }> = {
   invalid: {
@@ -44,34 +29,26 @@ const ERRORS: Record<ConvertErrorCode, { title: string; desc: string }> = {
   },
 };
 
-const PRESETS = [
-  { value: "none", label: "프롬프트 없음", text: "" },
-  { value: "summary", label: "요약해줘", text: "요약해줘" },
-  { value: "translate", label: "한국어로 번역해줘", text: "한국어로 번역해줘" },
-  { value: "explain", label: "쉽게 설명해줘", text: "쉽게 설명해줘" },
-  { value: "custom", label: "직접 입력", text: "" },
-] as const;
-
 type Status =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "error"; code: ConvertErrorCode }
   | { kind: "done"; page: ConvertResult };
 
-export function UrlToMarkdown() {
+type UrlToMarkdownProps = {
+  // 변환 결과 카드의 내보내기 줄 앞에 붙는 추가 동작. 조합은 상위에서 한다.
+  renderActions?: (page: ConvertResult) => ReactNode;
+};
+
+export function UrlToMarkdown({ renderActions }: UrlToMarkdownProps) {
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const [preset, setPreset] = useState<string>("none");
-  const [custom, setCustom] = useState("");
-  const [notice, setNotice] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const requestId = useRef(0);
   const loading = status.kind === "loading";
 
   async function convert(e: FormEvent) {
     e.preventDefault();
-    setNotice("");
     const id = ++requestId.current;
     const isCurrent = () => id === requestId.current;
     setStatus({ kind: "loading" });
@@ -97,50 +74,9 @@ export function UrlToMarkdown() {
     requestId.current++;
     setUrl("");
     setStatus({ kind: "idle" });
-    setPreset("none");
-    setCustom("");
-    setNotice("");
-    setCopied(false);
   }
 
   const page = status.kind === "done" ? status.page : null;
-  const promptText =
-    preset === "custom"
-      ? custom
-      : (PRESETS.find((p) => p.value === preset)?.text ?? "");
-
-  async function copy() {
-    if (!page) return;
-    await navigator.clipboard.writeText(page.markdown);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
-  }
-
-  function download() {
-    if (!page) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(
-      new Blob([page.markdown], { type: "text/markdown;charset=utf-8" }),
-    );
-    a.download = downloadFilename(page.title);
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  async function openIn(service: ChatService) {
-    if (!page) return;
-    const text = buildExportText(promptText, page.markdown);
-    await navigator.clipboard.writeText(text);
-    const { url: target, filled } = buildChatUrl(service, text);
-    window.open(target, "_blank", "noopener");
-    const name = service === "chatgpt" ? "ChatGPT" : "Claude";
-    setNotice(
-      filled
-        ? `클립보드에 복사했고, ${name} 입력창을 채워 새 탭으로 열었습니다.`
-        : "클립보드에 복사했습니다. 붙여넣기 하세요",
-    );
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm leading-relaxed text-muted-foreground">
@@ -202,109 +138,17 @@ export function UrlToMarkdown() {
 
       {page && (
         <Card role="article" className="gap-0 py-0">
-          <CardHeader className="gap-2 border-b py-5 [&>*]:min-w-0">
-            <h1 className="font-heading text-xl leading-snug font-semibold text-balance break-keep [overflow-wrap:anywhere]">
-              {page.title}
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              {page.author && (
-                <span data-slot="author" className="font-medium text-foreground">
-                  {page.author}
-                </span>
-              )}
-              <Badge variant="secondary">{page.site}</Badge>
-              <a
-                href={page.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="break-all underline underline-offset-4"
-              >
-                {page.url.replace(/^https?:\/\//, "")}
-              </a>
-            </div>
-          </CardHeader>
-
-          <div className="flex flex-col gap-4 border-b px-6 py-4">
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-semibold">
-                LLM에 보낼 프롬프트{" "}
-                <span className="font-normal text-muted-foreground">
-                  · ChatGPT·Claude로 열 때만 앞에 붙습니다
-                </span>
-              </span>
-              <ToggleGroup
-                variant="outline"
-                spacing={2}
-                className="flex-wrap"
-                value={[preset]}
-                onValueChange={(v) => {
-                  if (v[0]) {
-                    setPreset(v[0]);
-                    setNotice("");
-                  }
-                }}
-              >
-                {PRESETS.map((p) => (
-                  <ToggleGroupItem key={p.value} value={p.value} className="rounded-full">
-                    {p.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-              {preset === "custom" && (
-                <Input
-                  autoComplete="off"
-                  placeholder="예: 핵심만 3줄로 정리해줘"
-                  aria-label="직접 입력 프롬프트"
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  autoFocus
-                />
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-semibold">내보내기</span>
-              <div className="flex flex-wrap gap-2 max-sm:[&>button]:flex-1">
-                <Button variant="outline" onClick={copy}>
-                  {copied ? <CheckIcon data-icon="inline-start" /> : <CopyIcon data-icon="inline-start" />}
-                  {copied ? "복사했습니다" : "복사하기"}
-                </Button>
-                <Button variant="outline" onClick={download}>
-                  <DownloadIcon data-icon="inline-start" />
-                  .md 다운로드
-                </Button>
-                <Button onClick={() => openIn("chatgpt")}>
-                  ChatGPT로 열기
-                  <ExternalLinkIcon data-icon="inline-end" />
-                </Button>
-                <Button onClick={() => openIn("claude")}>
-                  Claude로 열기
-                  <ExternalLinkIcon data-icon="inline-end" />
-                </Button>
-              </div>
-            </div>
-
-            {notice && (
-              <Alert role="status">
-                <InfoIcon />
-                <AlertDescription>{notice}</AlertDescription>
-              </Alert>
-            )}
-          </div>
-
+          <ArticleHeader {...page} />
+          <ExportPanel
+            title={page.title}
+            markdown={page.markdown}
+            actions={renderActions?.(page)}
+          />
           <div className="px-6 py-5">
             <MarkdownBody markdown={page.markdown} />
           </div>
         </Card>
       )}
-    </div>
-  );
-}
-
-function MarkdownBody({ markdown }: { markdown: string }) {
-  return (
-    <div className="text-[15px] leading-7 break-keep [overflow-wrap:anywhere] [&_a]:underline [&_a]:underline-offset-4 [&_blockquote]:mb-3.5 [&_blockquote]:border-l-[3px] [&_blockquote]:pl-3.5 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:font-mono [&_code]:text-[0.9em] [&_h1]:mt-6 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mt-7 [&_h2]:mb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mt-5 [&_h3]:mb-1.5 [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:mb-3.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-3.5 [&_pre]:mb-3.5 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_ul]:mb-3.5 [&_ul]:list-disc [&_ul]:pl-5 [&>:first-child]:mt-0 [&>:last-child]:mb-0">
-      <ReactMarkdown>{markdown}</ReactMarkdown>
     </div>
   );
 }

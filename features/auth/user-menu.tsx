@@ -23,6 +23,12 @@ export async function UserMenu() {
   return (
     <div className="flex items-center gap-2">
       <Link
+        href="/saved"
+        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+      >
+        저장 목록
+      </Link>
+      <Link
         href="/settings"
         className="text-sm text-muted-foreground underline-offset-4 hover:underline"
       >
