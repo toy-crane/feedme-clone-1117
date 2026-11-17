@@ -1,4 +1,5 @@
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/features/auth/user-menu";
 import { UrlToMarkdown } from "@/features/url-to-markdown/url-to-markdown";
 
 export default function Home() {
@@ -11,7 +12,10 @@ export default function Home() {
             LLM에 바로 넘기기
           </small>
         </h2>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <UserMenu />
+          <ThemeToggle />
+        </div>
       </header>
       <UrlToMarkdown />
     </main>
